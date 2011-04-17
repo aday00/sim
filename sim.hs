@@ -1,13 +1,15 @@
-
+-- import qualified Data.Vector as V
 
 gravity = 9.8
 dt = 0.01
 
+type Ft = Float -- default floating-point type to use.  Could be Double.
+
 -- Particle: position velocity
 data Ptcl = Ptcl {
-    mass     :: Float
-  , position :: Float
-  , velocity :: Float
+    mass     :: Ft
+  , position :: Ft
+  , velocity :: Ft
 } deriving (Show)
 
 -- return new particle effected by gravity
@@ -22,8 +24,11 @@ gravitate p = p' where
     , velocity = vel
   } 
 
+-- gravitate until hit the ground
+fall :: [Ptcl] -> [Ptcl]
+fall ptcls@(p:ps) | position p <= 0 = ptcls
+fall ptcls@(p:ps) = fall (p':ptcls) where
+  p' = gravitate p
+
 main = do
-  let p = Ptcl 1 10 0
-  let p' = gravitate p
-  putStrLn $ show p
-  putStrLn $ show p'
+  mapM_ (putStrLn . show) (fall [Ptcl 1 10 0])
