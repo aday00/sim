@@ -31,6 +31,7 @@ int main(int argc, char** argv)
     }
   }
 
+  ginit();
   printf("hello, datalen is %d\n", datalen);
   sum(datalen);
   return 0;
