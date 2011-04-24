@@ -248,7 +248,7 @@ int sum (int datalen) {
   }
 
   /***
-   * Run GPU kernel
+   * Run GPU kernel, read output, then release resources.
    */
 
   global = databytes;
@@ -259,8 +259,15 @@ int sum (int datalen) {
       return -1;
   }
 
-  /* Blocks for command queue to complete */
-  clFinish(cmdq);
+#define clreturn(func, arg) do { \
+  ret = func(arg); \
+  if (ret != CL_SUCCESS) { \
+    E("%s error %d!", #func, ret); \
+    return -1; \
+  } \
+} while (0);
+  clreturn(clFlush,  cmdq);
+  clreturn(clFinish, cmdq); /* Blocks for cmdq to complete */
 
   ret = clEnqueueReadBuffer(cmdq, gpuout, CL_TRUE, 0, databytes, out, 0, NULL, NULL );
   if (ret != CL_SUCCESS) {
@@ -268,23 +275,12 @@ int sum (int datalen) {
     return -1;
   }
 
-  /***
-   * Release GPU resources
-   */
-#define checkreleasereturn(func, arg) do { \
-  ret = func(arg); \
-  if (ret != CL_SUCCESS) { \
-    E("%s error %d!", #func, ret); \
-    return -1; \
-  } \
-} while (0);
-  checkreleasereturn(clFinish,              cmdq);
-  checkreleasereturn(clReleaseKernel,       kern);
-  checkreleasereturn(clReleaseProgram,      prog);
-  checkreleasereturn(clReleaseMemObject,    gpuin);
-  checkreleasereturn(clReleaseMemObject,    gpuout);
-  checkreleasereturn(clReleaseCommandQueue, cmdq);
-  checkreleasereturn(clReleaseContext,      context);
+  clreturn(clReleaseKernel,       kern);
+  clreturn(clReleaseProgram,      prog);
+  clreturn(clReleaseMemObject,    gpuin);
+  clreturn(clReleaseMemObject,    gpuout);
+  clreturn(clReleaseCommandQueue, cmdq);
+  clreturn(clReleaseContext,      context);
 
   /***
    * Validate results, print report
