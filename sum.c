@@ -37,12 +37,18 @@ int sum (int datalen) {
   char *platform_buf;
   int platform_buflen = 128;
 
+  /* For reading OpenCL program source */
+  FILE *fp;
+  char *source;
+  char *sourcefn = "sum.cl";
+  size_t sourcelen;
+
 
   ret = -1;
   databytes = sizeof(int) * datalen;
 
   /***
-   * Allocate buffers
+   * Allocate buffers, read OpenCL program source.
    */
 
   /* Show this many results each test */
@@ -54,6 +60,19 @@ int sum (int datalen) {
   allocreturn(passes, showbytes);
   allocreturn(fails,  showbytes);
   allocreturn(platform_buf, platform_buflen);
+
+  fp = fopen(sourcefn, "r");
+  if (!fp) {
+    E("Failed to read kernel source");
+    return -1;
+  }
+  source = gmalloc(MAX_CL_SOURCE_SIZE); /* get file size */
+  sourcelen = fread(source, 1, MAX_CL_SOURCE_SIZE, fp);
+  if (sourcelen <= 0) {
+    E("Kernel source read of %s returned %d bytes!", sourcefn, sourcelen);
+  }
+
+
 
   /***
    * Setup GPU

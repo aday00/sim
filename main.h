@@ -14,19 +14,23 @@
 #include <CL/cl.h>
 #endif
 
+/* OpenCL source files may maximally be this size */
+#define MAX_CL_SOURCE_SIZE (0x100000) /* 1 megabyte */
+
 
 
 #define PRINT_DEBUG 1
+#define eprintf(...) fprintf( stderr, ##__VA_ARGS__ )
 #if PRINT_DEBUG > 1
-#define E( msg, ... ) printf( "%s: ERROR: %s, line %d: " msg "\n", \
-		              __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__ )
-#define I( msg, ... ) printf( "%s: INFO:  %s, line %d: " msg "\n", \
-		              __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__ )
+#define E( msg, ... ) eprintf( "%s: ERROR: %s, line %d: " msg "\n", \
+                               __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__ )
+#define I( msg, ... ) eprintf( "%s: INFO:  %s, line %d: " msg "\n", \
+                               __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__ )
 #elif PRINT_DEBUG == 1
-#define E( msg, ... ) printf( "%s: ERROR: %s, line %d: " msg "\n", \
-		              __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__ )
-#define I( msg, ... ) printf( "%s: INFO: " msg "\n", \
-		              __FILE__, ##__VA_ARGS__ )
+#define E( msg, ... ) eprintf( "%s: ERROR: %s, line %d: " msg "\n", \
+                               __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__ )
+#define I( msg, ... ) eprintf( "%s: INFO: " msg "\n", \
+                               __FILE__, ##__VA_ARGS__ )
 #else
 #define E( msg, ... ) do { } while (0)
 #define I( msg, ... ) do { } while (0)
