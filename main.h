@@ -38,4 +38,16 @@
 #define ginit   GC_init
 #define gmalloc GC_malloc
 
+
+
+/* A checked gmalloc.  WARNING: caller returns -1 on failure. */
+#define allocreturn(buf, size) do { \
+  buf = gmalloc(size); \
+  if (!buf) { \
+    E("Could not allocate %d bytes for variable \"" #buf "\"", size); \
+    return -1; \
+  } \
+} while (0);
+
+
 #endif /* _MAIN_H_ */

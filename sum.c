@@ -19,36 +19,59 @@ int sum (int datalen) {
       databytes, showlen, showbytes;
   int *in, *out, *passes, *fails;
 
+  size_t global, local; /* memory sizes for gpu calculations */
+
+  cl_device_id     devid;
+  cl_device_type   devtype;
+  cl_platform_id   platid;
+  cl_platform_id*  platids;
+  cl_context       ctx;
+  cl_command_queue cmdq;
+  cl_program       prog;
+  cl_kernel        kern;
+
+  cl_uint          num_platforms;
+
+  cl_mem gpuin, gpuout; /* device memory for input and output arys */
+  int gpu = 1; /* use gpu */
+  char *platform_buf;
+
+
   ret = -1;
   databytes = sizeof(int) * datalen;
 
-  in = gmalloc(databytes);
-  if (!in) {
-    E("Cannot allocate input buffer");
-    return -1;
-  }
-
-  out = gmalloc(databytes);
-  if (!out) {
-    E("Cannot allocate output buffer");
-    return -1;
-  }
+  /***
+   * Allocate buffers
+   */
 
   /* Show this many results each test */
   showlen   = (int)log((double)datalen);
   showbytes = sizeof(int) * showlen;
 
-  passes = gmalloc(showbytes);
-  if (!passes) {
-    E("Cannot allocate passes buffer");
-    return -1;
+  allocreturn(in,     databytes);
+  allocreturn(out,    databytes);
+  allocreturn(gpuout, showbytes);
+  allocreturn(passes, showbytes);
+  allocreturn(fails,  showbytes);
+  allocreturn(platform_buf, 128);
+
+  /***
+   * Setup GPU
+   */
+  devtype = gpu ? CL_DEVICE_TYPE_GPU : CL_DEVICE_TYPE_CPU;
+
+  /* Get platform before getdeviceids
+   * http://developer.amd.com/Support/KnowledgeBase/Lists/KnowledgeBase/DispForm.aspx?ID=71
+   */
+  ret = clGetPlatformIDs(0, NULL, &num_platforms);
+  if (ret) {
+    E("clGetPlatformIDs ret %d, num platforms %d.", ret, num_platforms);
   }
 
-  fails = gmalloc(showbytes);
-  if (!fails) {
-    E("Cannot allocate fails buffer");
-    return -1;
+  if (num_platforms > 0) {
+    allocreturn(platids, sizeof(cl_platform_id) * num_platforms);
   }
+
 
 
 
