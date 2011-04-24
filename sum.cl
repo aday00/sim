@@ -3,10 +3,12 @@
  */
 
 __kernel
-void sum(__global const int *in, __global int *out) {
-  /* Get the index of the current element to be processed */
+void sum(__global const int *in, __global int *out, const unsigned int len) {
   int i, t;
-  i = get_global_id(0);
-  t = in[i];
-  out[i] = (i * (i+1)) / 2;
+
+  i = get_global_id(0); /* Current elm idx to process */
+  if (i < len) {
+    t = in[i];
+    out[i] = (t * (t+1)) / 2;
+  }
 }

@@ -28,17 +28,19 @@ int sum (int datalen) {
   cl_device_type   devtype;
   cl_platform_id   platform = NULL;
   cl_platform_id*  platforms;
+  cl_uint          platformslen;
   cl_context       context;
   cl_command_queue cmdq;
   cl_program       prog;
   cl_kernel        kern;
 
-  cl_uint          platformslen;
-
   cl_mem gpuin, gpuout; /* device memory for input and output arys */
+
   int gpu = 1; /* use gpu */
   char *platform_buf;
-  int platform_buflen = 128;
+  int platform_bufsize = 128;
+  char *progerr_buf;
+  size_t progerr_bufsize = 2048, progerr_buflen;
 
   /* For reading OpenCL program source */
   FILE *fp;
@@ -52,7 +54,7 @@ int sum (int datalen) {
   databytes = sizeof(int) * datalen;
 
   /***
-   * Allocate buffers, read OpenCL program source.
+   * Allocate buffers, read OpenCL program source, setup input.
    */
 
   /* Show this many results each test */
@@ -63,7 +65,7 @@ int sum (int datalen) {
   allocreturn(out,    databytes);
   allocreturn(passes, showbytes);
   allocreturn(fails,  showbytes);
-  allocreturn(platform_buf, platform_buflen);
+  allocreturn(platform_buf, platform_bufsize);
 
   ret = stat(sourcefn, &info);
   if (ret) {
@@ -78,15 +80,20 @@ int sum (int datalen) {
 
   fp = fopen(sourcefn, "r");
   if (!fp) {
-    E("Failed to read kernel source file %s, err %d", sourcefn, errno);
+    E("Failed to read program source file %s, err %d", sourcefn, errno);
     return -1;
   }
   alloclongreturn(source, sourcelen);
   sourceread = fread(source, 1, sourcelen, fp);
-  if (sourceread <= 0 || sourceread != sourcelen) {
-    E("Kernel source read of %s returned %d bytes!  Source is %ld bytes.",
+  if (sourceread < sourcelen) {
+    E("Program source read of %s returned %d bytes!  Source is %ld bytes.",
       sourcefn, sourceread, sourcelen);
-    return -1;
+    return -1; /* Cannot expect to continue */
+  }
+
+  /* Input for GPU */
+  for (i = 0; i < datalen; i++) {
+    in[i] = i;
   }
 
   /***
@@ -115,7 +122,7 @@ int sum (int datalen) {
     return -1;
   }
   for (i = 0; i < platformslen; i++) {
-    ret = clGetPlatformInfo(platforms[i], CL_PLATFORM_VENDOR, platform_buflen,
+    ret = clGetPlatformInfo(platforms[i], CL_PLATFORM_VENDOR, platform_bufsize,
                             platform_buf, NULL);
     I("clGetPlatformInfo[%d] returned %d platform %s", i, ret, platform_buf);
     if (ret == CL_SUCCESS) {
@@ -161,6 +168,10 @@ int sum (int datalen) {
     }
   }
 
+  /***
+   * Build GPU program
+   */
+
   cmdq = clCreateCommandQueue(context, devid, 0, &ret);
   if (cmdq) {
     if (ret != CL_SUCCESS) {
@@ -171,15 +182,95 @@ int sum (int datalen) {
     return -1;
   }
 
-
-
-  for (i = 0; i < datalen; i++) {
-    in[i] = i;
+  prog = clCreateProgramWithSource(context, 1, (const char **)&source, NULL,
+                                   &ret);
+  if (!prog) {
+    E("Program creation failed %d!", ret);
+    return -1;
+  } else if (ret != CL_SUCCESS) {
+    I("Program creation returned %d.", ret);
   }
-  for (i = 0; i < datalen; i++) {
-    out[i] = (i * (i + 1)) / 2;
+
+  ret = clBuildProgram(prog, 0, NULL, NULL, NULL, NULL);
+  if (ret != CL_SUCCESS) {
+    E("Program build failed %d!", ret);
+    allocreturn(progerr_buf,  progerr_bufsize);
+    clGetProgramBuildInfo(prog, devid, CL_PROGRAM_BUILD_LOG, progerr_bufsize,
+                          progerr_buf, &progerr_buflen);
+    E("Build info follows:\n%s", progerr_buf);
+    return -1;
   }
 
+  kern = clCreateKernel(prog, "sum", &ret);
+  if (!kern || ret != CL_SUCCESS) {
+    E("Kernel creation failed %d!", ret);
+    return -1;
+  }
+
+  gpuin = clCreateBuffer(context,  CL_MEM_READ_ONLY,  databytes, NULL, &ret);
+  if (!gpuin) {
+    E("Input buffer creation on device failed %d!", ret);
+    return -1;
+  } else if (ret != CL_SUCCESS) {
+    I("Input buffer creation on device returned %d", ret);
+  }
+  gpuout = clCreateBuffer(context, CL_MEM_WRITE_ONLY, databytes, NULL, &ret);
+  if (!gpuout) {
+    E("Output buffer creation on device failed %d!", ret);
+    return -1;
+  } else if (ret != CL_SUCCESS) {
+    I("Output buffer creation on device returned %d", ret);
+  }
+
+  ret = clEnqueueWriteBuffer(cmdq, gpuin, CL_TRUE, 0, databytes, in, 0, NULL,
+                             NULL);
+  if (ret != CL_SUCCESS) {
+    E("Buffer write failed %d!", ret);
+    return -1;
+  }
+
+#define kernarg(kern, idx, var, size) do { \
+  ret = clSetKernelArg(kern, idx, size, var); \
+  if (ret != CL_SUCCESS) { \
+    E("Kernel argument %d set failed %d!", idx, ret); \
+    return -1; \
+  } \
+} while(0);
+  kernarg(kern, 0, &gpuin,  sizeof(cl_mem));
+  kernarg(kern, 1, &gpuout, sizeof(cl_mem));
+  kernarg(kern, 2, &databytes, sizeof(int));
+
+  ret = clGetKernelWorkGroupInfo(kern, devid, CL_KERNEL_WORK_GROUP_SIZE,
+                                 sizeof(local), &local, NULL);
+  if (ret != CL_SUCCESS) {
+      E("Max work group size retrieval failed %d!", ret);
+      return -1;
+  }
+
+  /***
+   * Run GPU kernel
+   */
+
+  global = databytes;
+  ret = clEnqueueNDRangeKernel(cmdq, kern, 1, NULL, &global, &local, 0, NULL,
+                               NULL);
+  if (ret != CL_SUCCESS) {
+      E("Kernel exec failed %d!", ret);
+      return -1;
+  }
+
+  /* Blocks for command queue to complete */
+  clFinish(cmdq);
+
+  ret = clEnqueueReadBuffer(cmdq, gpuout, CL_TRUE, 0, databytes, out, 0, NULL, NULL );
+  if (ret != CL_SUCCESS) {
+    E("Output read failed %d!", ret);
+    return -1;
+  }
+
+  /***
+   * Validate results, print report
+   */
 
   printf("sum test: ");
   f = p = passed = 0;
