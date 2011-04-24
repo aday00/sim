@@ -1,4 +1,4 @@
 CC=gcc
 
-main: main.c
-	gcc main.c -o main
+main: main.c sum.c
+	gcc main.c sum.c -o main

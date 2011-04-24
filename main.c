@@ -32,5 +32,6 @@ int main(int argc, char** argv)
   }
 
   printf("hello, datalen is %d\n", datalen);
+  sum(datalen);
   return 0;
 }
