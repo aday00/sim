@@ -269,6 +269,24 @@ int sum (int datalen) {
   }
 
   /***
+   * Release GPU resources
+   */
+#define checkreleasereturn(func, arg) do { \
+  ret = func(arg); \
+  if (ret != CL_SUCCESS) { \
+    E("%s error %d!", #func, ret); \
+    return -1; \
+  } \
+} while (0);
+  checkreleasereturn(clFinish,              cmdq);
+  checkreleasereturn(clReleaseKernel,       kern);
+  checkreleasereturn(clReleaseProgram,      prog);
+  checkreleasereturn(clReleaseMemObject,    gpuin);
+  checkreleasereturn(clReleaseMemObject,    gpuout);
+  checkreleasereturn(clReleaseCommandQueue, cmdq);
+  checkreleasereturn(clReleaseContext,      context);
+
+  /***
    * Validate results, print report
    */
 
