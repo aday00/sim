@@ -6,9 +6,12 @@
  * outputs: 0  1  3  6 10 15 ...
  */
 
+#include <errno.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "gc.h"
@@ -39,10 +42,11 @@ int sum (int datalen) {
 
   /* For reading OpenCL program source */
   FILE *fp;
+  struct stat info;
   char *source;
   char *sourcefn = "sum.cl";
-  size_t sourcelen;
-
+  off_t sourcelen;
+  size_t sourceread;
 
   ret = -1;
   databytes = sizeof(int) * datalen;
@@ -61,18 +65,29 @@ int sum (int datalen) {
   allocreturn(fails,  showbytes);
   allocreturn(platform_buf, platform_buflen);
 
-  fp = fopen(sourcefn, "r");
-  if (!fp) {
-    E("Failed to read kernel source");
+  ret = stat(sourcefn, &info);
+  if (ret) {
+    E("Could not get status of file %s, ret %d, err %d", sourcefn, ret, errno);
     return -1;
   }
-  source = gmalloc(MAX_CL_SOURCE_SIZE); /* get file size */
-  sourcelen = fread(source, 1, MAX_CL_SOURCE_SIZE, fp);
+  sourcelen = info.st_size; /* filesize of source */
   if (sourcelen <= 0) {
-    E("Kernel source read of %s returned %d bytes!", sourcefn, sourcelen);
+    E("File %s length of %ld invalid!", sourcefn, sourcelen);
+    return -1;
   }
 
-
+  fp = fopen(sourcefn, "r");
+  if (!fp) {
+    E("Failed to read kernel source file %s, err %d", sourcefn, errno);
+    return -1;
+  }
+  alloclongreturn(source, sourcelen);
+  sourceread = fread(source, 1, sourcelen, fp);
+  if (sourceread <= 0 || sourceread != sourcelen) {
+    E("Kernel source read of %s returned %d bytes!  Source is %ld bytes.",
+      sourcefn, sourceread, sourcelen);
+    return -1;
+  }
 
   /***
    * Setup GPU

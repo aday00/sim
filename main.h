@@ -14,9 +14,6 @@
 #include <CL/cl.h>
 #endif
 
-/* OpenCL source files may maximally be this size */
-#define MAX_CL_SOURCE_SIZE (0x100000) /* 1 megabyte */
-
 
 
 #define PRINT_DEBUG 1
@@ -49,6 +46,14 @@
   buf = gmalloc(size); \
   if (!buf) { \
     E("Could not allocate %d bytes for variable \"" #buf "\"", size); \
+    return -1; \
+  } \
+} while (0);
+/* Another, for long sizes */
+#define alloclongreturn(buf, longsize) do { \
+  buf = gmalloc(longsize); \
+  if (!buf) { \
+    E("Could not allocate %ld bytes for variable \"" #buf "\"", longsize); \
     return -1; \
   } \
 } while (0);
