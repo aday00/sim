@@ -23,18 +23,19 @@ int sum (int datalen) {
 
   cl_device_id     devid;
   cl_device_type   devtype;
-  cl_platform_id   platid;
-  cl_platform_id*  platids;
-  cl_context       ctx;
+  cl_platform_id   platform = NULL;
+  cl_platform_id*  platforms;
+  cl_context       context;
   cl_command_queue cmdq;
   cl_program       prog;
   cl_kernel        kern;
 
-  cl_uint          num_platforms;
+  cl_uint          platformslen;
 
   cl_mem gpuin, gpuout; /* device memory for input and output arys */
   int gpu = 1; /* use gpu */
   char *platform_buf;
+  int platform_buflen = 128;
 
 
   ret = -1;
@@ -50,28 +51,91 @@ int sum (int datalen) {
 
   allocreturn(in,     databytes);
   allocreturn(out,    databytes);
-  allocreturn(gpuout, showbytes);
   allocreturn(passes, showbytes);
   allocreturn(fails,  showbytes);
-  allocreturn(platform_buf, 128);
+  allocreturn(platform_buf, platform_buflen);
 
   /***
    * Setup GPU
    */
-  devtype = gpu ? CL_DEVICE_TYPE_GPU : CL_DEVICE_TYPE_CPU;
 
   /* Get platform before getdeviceids
    * http://developer.amd.com/Support/KnowledgeBase/Lists/KnowledgeBase/DispForm.aspx?ID=71
    */
-  ret = clGetPlatformIDs(0, NULL, &num_platforms);
-  if (ret) {
-    E("clGetPlatformIDs ret %d, num platforms %d.", ret, num_platforms);
+  ret = clGetPlatformIDs(0, NULL, &platformslen);
+  if (ret != CL_SUCCESS) {
+    E("clGetPlatformIDs returned %d, output num platforms %d.",
+      ret, platformslen);
+    return -1;
+  }
+  if (platformslen <= 0) {
+    E("Number of OpenCL platform IDs is %d!", platformslen);
+    return -1;
   }
 
-  if (num_platforms > 0) {
-    allocreturn(platids, sizeof(cl_platform_id) * num_platforms);
+  allocreturn(platforms, sizeof(cl_platform_id) * platformslen);
+  ret = clGetPlatformIDs(platformslen, platforms, NULL);
+  if (ret != CL_SUCCESS) {
+    E("clGetPlatformIDs returned %d, given num platforms %d",
+      ret, platformslen);
+    return -1;
+  }
+  for (i = 0; i < platformslen; i++) {
+    ret = clGetPlatformInfo(platforms[i], CL_PLATFORM_VENDOR, platform_buflen,
+                            platform_buf, NULL);
+    I("clGetPlatformInfo[%d] returned %d platform %s", i, ret, platform_buf);
+    if (ret == CL_SUCCESS) {
+      /* TBD: allow use of more than one available platform. */
+      platform = platforms[i];
+    }
   }
 
+  devtype = gpu ? CL_DEVICE_TYPE_GPU : CL_DEVICE_TYPE_CPU;
+  ret = clGetDeviceIDs(platform, devtype, 1, &devid, NULL);
+  if (ret != CL_SUCCESS) {
+    E("Device group creation failed %d", ret);
+    return -1;
+  }
+
+  if (platform != NULL) {
+    /* Platform found, use it. */
+    cl_context_properties cps[3] = {
+      CL_CONTEXT_PLATFORM, 
+      (cl_context_properties)platform, 
+      0
+    };
+    context = clCreateContextFromType(cps, devtype, NULL, NULL, &ret);
+    if (context) {
+      if (ret != CL_SUCCESS) {
+        I("Type-based compute context creation returned %d", ret);
+      }
+    } else {
+      E("Type-based compute context creation failed %d!", ret);
+      /* Fall through to default context creation method */
+    }
+  }
+  if (platform == NULL || context == NULL) {
+    /* Use default platform.  Tends to fail. */
+    context = clCreateContext(0, 1, &devid, NULL, NULL, &ret);
+    if (context) {
+      if (ret != CL_SUCCESS) {
+        I("Default compute context creation returned %d", ret);
+      }
+    } else {
+      E("Default compute context creation failed %d!", ret);
+      return -1;
+    }
+  }
+
+  cmdq = clCreateCommandQueue(context, devid, 0, &ret);
+  if (cmdq) {
+    if (ret != CL_SUCCESS) {
+      I("Command queue creation returned %d", ret);
+    }
+  } else {
+    E("Command queue creation failed %d!", ret);
+    return -1;
+  }
 
 
 
