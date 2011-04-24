@@ -15,7 +15,7 @@
 #include "main.h"
 
 int sum (int datalen) {
-  int ret, i, t, passed,
+  int ret, i, t, p, f, passed,
       databytes, showlen, showbytes;
   int *in, *out, *passes, *fails;
 
@@ -40,13 +40,13 @@ int sum (int datalen) {
 
   passes = gmalloc(showbytes);
   if (!passes) {
-    E("Cannot allocate passes buffer\n");
+    E("Cannot allocate passes buffer");
     return -1;
   }
 
   fails = gmalloc(showbytes);
   if (!fails) {
-    E("Cannot allocate fails buffer\n");
+    E("Cannot allocate fails buffer");
     return -1;
   }
 
@@ -61,14 +61,39 @@ int sum (int datalen) {
 
 
   printf("sum test: ");
-  passed = 0;
+  f = p = passed = 0;
   for (i = 0; i < datalen; i++) {
     t = in[i];
     if (out[i] == (t * (t+1))/2) {
       passed++;
+      if (p < showlen) {
+        passes[p++] = i;
+      }
+    } else {
+      if (f < showlen) {
+        fails[f++] = i;
+      }
     }
   }
   printf("%d/%d passed\n", passed, datalen);
+
+  if (p > 0) {
+    printf("Some passes:\n");
+    for (i = 0; i < p; i++) {
+      t = passes[i];
+      printf("in[%4d] = %10d\tout[%4d] = %10d\n",
+             t, in[t], t, out[t]);
+    }
+  }
+  if (f > 0) {
+    printf("Some fails:\n");
+    for (i = 0; i < f; i++) {
+      t = fails[i];
+      printf("in[%4d] = %10d\tout[%4d] = %10d\n",
+             t, in[t], t, out[t]);
+    }
+  }
+
   if (passed == datalen) {
     return 0;
   }
