@@ -17,7 +17,8 @@
 
 int rand_mwc(int datalen)
 {
-  unsigned int mw, mz;
+  unsigned int mw, mz, num_generators, rands_per_generator;
+
   int ret, i, j, t, p, f, passed,
       databytes, showlen, showbytes;
   int *in, *out, *passes, *fails;
@@ -49,6 +50,9 @@ int rand_mwc(int datalen)
   char *sourcefn = "rand_mwc.cl";
   off_t sourcelen;
   size_t sourceread;
+
+  rands_per_generator = 2; /* Each pRNG creates this many randoms */
+  num_generators = datalen / rands_per_generator;
 
   ret = -1;
   databytes = sizeof(int) * datalen;
@@ -251,7 +255,7 @@ int rand_mwc(int datalen)
    * Run GPU kernel, read output, then release resources.
    */
 
-  global = databytes;
+  global = databytes / 2;
   ret = clEnqueueNDRangeKernel(cmdq, kern, 1, NULL, &global, &local, 0, NULL,
                                NULL);
   if (ret != CL_SUCCESS) {
