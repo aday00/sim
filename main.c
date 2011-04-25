@@ -34,5 +34,6 @@ int main(int argc, char** argv)
   ginit();
   printf("hello, datalen is %d\n", datalen);
   sum(datalen);
+  rand_mwc(datalen);
   return 0;
 }

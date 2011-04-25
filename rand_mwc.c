@@ -1,9 +1,7 @@
 /*
- * sum.c  Copyright 2011 Andrew Schaumberg
+ * rand_mwc.c  Copyright 2011 Andrew Schaumberg
  *
- * Calculate sums of all integers preceding and including given integer.
- * inputs:  0  1  2  3  4  5 ...
- * outputs: 0  1  3  6 10 15 ...
+ * Multiply-with-carry pseudo-random number generator.
  */
 
 #include <errno.h>
@@ -17,9 +15,10 @@
 #include "gc.h"
 #include "main.h"
 
-int sum(int datalen)
+int rand_mwc(int datalen)
 {
-  int ret, i, t, p, f, passed,
+  unsigned int mw, mz;
+  int ret, i, j, t, p, f, passed,
       databytes, showlen, showbytes;
   int *in, *out, *passes, *fails;
 
@@ -47,7 +46,7 @@ int sum(int datalen)
   FILE *fp;
   struct stat info;
   char *source;
-  char *sourcefn = "sum.cl";
+  char *sourcefn = "rand_mwc.cl";
   off_t sourcelen;
   size_t sourceread;
 
@@ -92,8 +91,8 @@ int sum(int datalen)
     return -1; /* Cannot expect to continue */
   }
 
-  /* Input for GPU */
-  for (i = 0; i < datalen; i++) {
+  /* Input for GPU, input cannot be 0 */
+  for (i = 1; i <= datalen; i++) {
     in[i] = i;
   }
 
@@ -202,7 +201,7 @@ int sum(int datalen)
     return -1;
   }
 
-  kern = clCreateKernel(prog, "sum", &ret);
+  kern = clCreateKernel(prog, "rand_mwc", &ret);
   if (!kern || ret != CL_SUCCESS) {
     E("Kernel creation failed %d!", ret);
     return -1;
@@ -287,18 +286,39 @@ int sum(int datalen)
    * Validate results, print report
    */
 
-  printf("sum test: ");
+  printf("rand multiply-with-carry test: ");
   f = p = passed = 0;
-  for (i = 0; i < datalen; i++) {
-    t = in[i];
-    if (out[i] == (t * (t+1))/2) {
+  for (i = 0; i < datalen; i += 2) {
+    mw = in[i];
+    mz = in[i+1];
+
+    mw = 18000 * (mw & 0xffff) + (mw >> 16);
+    mz = 36969 * (mz & 0xffff) + (mz >> 16);
+    t = (mz << 16) + mw; /* first generated random */
+    j = i;
+    if (out[j] == t) {
       passed++;
       if (p < showlen) {
-        passes[p++] = i;
+        passes[p++] = j;
       }
     } else {
       if (f < showlen) {
-        fails[f++] = i;
+        fails[f++] = j;
+      }
+    }
+
+    mw = 18000 * (mw & 0xffff) + (mw >> 16);
+    mz = 36969 * (mz & 0xffff) + (mz >> 16);
+    t = (mz << 16) + mw; /* second generated random */
+    j++;
+    if (out[j] == t) {
+      passed++;
+      if (p < showlen) {
+        passes[p++] = j;
+      }
+    } else {
+      if (f < showlen) {
+        fails[f++] = j;
       }
     }
   }

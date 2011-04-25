@@ -30,8 +30,13 @@ clean:
 mrproper: clean
 	rm -rf $(GC_LIB)
 
-main: main.c sum.c
+rand_mwc.o: rand_mwc.c
+	$(CC) $(GEN_CFLAGS) -c rand_mwc.c -o rand_mwc.o
+
+sum.o: sum.c
 	$(CC) $(GEN_CFLAGS) -c sum.c -o sum.o
-	$(CC) $(GEN_CFLAGS) -lm main.c sum.o -o main
+
+main: main.c rand_mwc.o sum.o
+	$(CC) $(GEN_CFLAGS) -lm main.c rand_mwc.o sum.o -o main
 
 
