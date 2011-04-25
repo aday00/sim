@@ -9,26 +9,30 @@
 #include "rand_mwc.h"
 
 __kernel
-void rand_mwc(__global const int *in, __global int *out, const unsigned int len) {
-  unsigned int mw, mz; /* mz is the "high word", mw is the "low word" */
-  int i, t;
+void rand_mwc(__global const mwc_t *in, __global int *out) {
+  mwc_t m;
+  int i, o, t;
 
   i = get_global_id(0); /* Current elm idx to process */
 
   /* FIXME: maintain mw and mz in shared memory, generate many rands */
-  i  *= 2; /* Two rands generated per generator */
-  mw = in[i];
-  mz = in[i+1];
+  m = in[i];
+  
+  /* Just to make the code harder to understand, redefine i to index the 'out'
+   * array, which is twice as long as the 'in' array.
+   * This reduces register usage and may boost speed.
+   */
+  i *= 2;
 
-  mw = 18000 * (mw & 0xffff) + (mw >> 16);
-  mz = 36969 * (mz & 0xffff) + (mz >> 16);
-  t  = (mz << 16) + mw; /* first generated random */
+  m.w = 18000 * (m.w & 0xffff) + (m.w >> 16);
+  m.z = 36969 * (m.z & 0xffff) + (m.z >> 16);
+  t  = (m.z << 16) + m.w; /* first generated random */
 
-  out[i  ] = t; /* first generated random */
+  out[i] = t; /* first generated random */
 
-  mw = 18000 * (mw & 0xffff) + (mw >> 16);
-  mz = 36969 * (mz & 0xffff) + (mz >> 16);
-  t  = (mz << 16) + mw; /* first generated random */
+  m.w = 18000 * (m.w & 0xffff) + (m.w >> 16);
+  m.z = 36969 * (m.z & 0xffff) + (m.z >> 16);
+  t  = (m.z << 16) + m.w; /* first generated random */
 
   out[i+1] = t; /* second generated random */
 }

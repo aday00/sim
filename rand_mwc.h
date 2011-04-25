@@ -8,8 +8,8 @@
 #define _RAND_MWC_H_
 
 typedef struct mwc_s {
-  unsigned int mw;
-  unsigned int mz;
+  unsigned int w; /* the low word */
+  unsigned int z; /* the high word */
 } mwc_t;
 
 #endif /* _RAND_MWC_H_ */

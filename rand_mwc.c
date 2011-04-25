@@ -18,11 +18,12 @@
 
 int rand_mwc(int datalen)
 {
-  unsigned int mw, mz, num_generators, rands_per_generator;
+  unsigned int u, v, num_generators, rands_per_generator;
 
-  int ret, i, j, t, p, f, passed,
+  int ret, i, j, t, p, f, mwc_len, mwc_bytes, passed,
       databytes, showlen, showbytes;
-  int *in, *out, *passes, *fails;
+  int *out, *passes, *fails;
+  mwc_t *in, m;
 
   size_t global, local; /* memory sizes for gpu calculations */
 
@@ -54,6 +55,8 @@ int rand_mwc(int datalen)
 
   rands_per_generator = 2; /* Each pRNG creates this many randoms */
   num_generators = datalen / rands_per_generator;
+  mwc_len = num_generators;
+  mwc_bytes = sizeof(mwc_t) * mwc_len;
 
   ret = -1;
   databytes = sizeof(int) * datalen;
@@ -66,7 +69,7 @@ int rand_mwc(int datalen)
   showlen   = (int)log((double)datalen);
   showbytes = sizeof(int) * showlen;
 
-  allocreturn(in,     databytes);
+  allocreturn(in,     mwc_bytes);
   allocreturn(out,    databytes);
   allocreturn(passes, showbytes);
   allocreturn(fails,  showbytes);
@@ -97,8 +100,9 @@ int rand_mwc(int datalen)
   }
 
   /* Input for GPU, input cannot be 0 */
-  for (i = 1; i <= datalen; i++) {
-    in[i] = i;
+  for (u = 0; u <= mwc_len; u++ ) {
+    v = u * rands_per_generator;
+    in[u] = (mwc_t) { v+1, v+2 };
   }
 
   /***
@@ -200,7 +204,7 @@ int rand_mwc(int datalen)
   ret = clBuildProgram(prog, 0, NULL, "-I ./", NULL, NULL);
   if (ret != CL_SUCCESS) {
     E("Program build failed %d!", ret);
-    allocreturn(progerr_buf,  progerr_bufsize);
+    allocreturn(progerr_buf, progerr_bufsize);
     clGetProgramBuildInfo(prog, devid, CL_PROGRAM_BUILD_LOG, progerr_bufsize,
                           progerr_buf, &progerr_buflen);
     E("Build info follows:\n%s", progerr_buf);
@@ -213,7 +217,7 @@ int rand_mwc(int datalen)
     return -1;
   }
 
-  gpuin = clCreateBuffer(context,  CL_MEM_READ_ONLY,  databytes, NULL, &ret);
+  gpuin = clCreateBuffer(context,  CL_MEM_READ_ONLY,  mwc_bytes, NULL, &ret);
   if (!gpuin) {
     E("Input buffer creation on device failed %d!", ret);
     return -1;
@@ -228,7 +232,7 @@ int rand_mwc(int datalen)
     I("Output buffer creation on device returned %d", ret);
   }
 
-  ret = clEnqueueWriteBuffer(cmdq, gpuin, CL_TRUE, 0, databytes, in, 0, NULL,
+  ret = clEnqueueWriteBuffer(cmdq, gpuin, CL_TRUE, 0, mwc_bytes, in, 0, NULL,
                              NULL);
   if (ret != CL_SUCCESS) {
     E("Buffer write failed %d!", ret);
@@ -244,7 +248,6 @@ int rand_mwc(int datalen)
 } while(0);
   kernarg(kern, 0, &gpuin,  sizeof(cl_mem));
   kernarg(kern, 1, &gpuout, sizeof(cl_mem));
-  kernarg(kern, 2, &databytes, sizeof(int));
 
   ret = clGetKernelWorkGroupInfo(kern, devid, CL_KERNEL_WORK_GROUP_SIZE,
                                  sizeof(local), &local, NULL);
@@ -294,14 +297,13 @@ int rand_mwc(int datalen)
 
   printf("rand multiply-with-carry test: ");
   f = p = passed = 0;
-  for (i = 0; i < datalen; i += 2) {
-    mw = in[i];
-    mz = in[i+1];
+  for (i = 0; i < mwc_len; i++) {
+    m = in[i];
 
-    mw = 18000 * (mw & 0xffff) + (mw >> 16);
-    mz = 36969 * (mz & 0xffff) + (mz >> 16);
-    t = (mz << 16) + mw; /* first generated random */
-    j = i;
+    m.w = 18000 * (m.w & 0xffff) + (m.w >> 16);
+    m.z = 36969 * (m.z & 0xffff) + (m.z >> 16);
+    t = (m.z << 16) + m.w; /* first generated random */
+    j = i * rands_per_generator;
     if (out[j] == t) {
       passed++;
       if (p < showlen) {
@@ -313,9 +315,9 @@ int rand_mwc(int datalen)
       }
     }
 
-    mw = 18000 * (mw & 0xffff) + (mw >> 16);
-    mz = 36969 * (mz & 0xffff) + (mz >> 16);
-    t = (mz << 16) + mw; /* second generated random */
+    m.w = 18000 * (m.w & 0xffff) + (m.w >> 16);
+    m.z = 36969 * (m.z & 0xffff) + (m.z >> 16);
+    t = (m.z << 16) + m.w; /* second generated random */
     j++;
     if (out[j] == t) {
       passed++;
@@ -334,16 +336,19 @@ int rand_mwc(int datalen)
     printf("Some passes:\n");
     for (i = 0; i < p; i++) {
       t = passes[i];
-      printf("in[%4d] = %11d\tout[%4d] = %11d\n",
-             t, in[t], t, out[t]);
+      m = in[t];
+      j = t * rands_per_generator;
+      printf("in[%4d] = (%4d,%4d}\tout[%4d,%4d] = %11d,%11d\n",
+             t, m.w, m.z, j, j+1, out[j], out[j+1]);
     }
   }
   if (f > 0) {
     printf("Some fails:\n");
     for (i = 0; i < f; i++) {
       t = fails[i];
-      printf("in[%4d] = %11d\tout[%4d] = %11d\n",
-             t, in[t], t, out[t]);
+      m = in[t];
+      printf("in[%4d] = (%4d,%4d}\tout[%4d,%4d] = %11d,%11d\n",
+             t, m.w, m.z, t, t+1, out[t], out[t+1]);
     }
   }
 
