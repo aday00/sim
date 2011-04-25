@@ -21,15 +21,20 @@
 #if PRINT_DEBUG > 1
 #define E( msg, ... ) eprintf( "%s: ERROR: %s, line %d: " msg "\n", \
                                __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__ )
+#define T( msg, ... ) eprintf( "%s: TRACE: %s, line %d: " msg "\n", \
+                               __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__ )
 #define I( msg, ... ) eprintf( "%s: INFO:  %s, line %d: " msg "\n", \
                                __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__ )
 #elif PRINT_DEBUG == 1
 #define E( msg, ... ) eprintf( "%s: ERROR: %s, line %d: " msg "\n", \
                                __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__ )
+#define T( msg, ... ) eprintf( "%s: TRACE: %s, line %d: " msg "\n", \
+                               __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__ )
 #define I( msg, ... ) eprintf( "%s: INFO: " msg "\n", \
                                __FILE__, ##__VA_ARGS__ )
 #else
 #define E( msg, ... ) do { } while (0)
+#define T( msg, ... ) do { } while (0)
 #define I( msg, ... ) do { } while (0)
 #endif
 
@@ -57,6 +62,14 @@
     return -1; \
   } \
 } while (0);
+
+
+/* Safe quick garbage-collected caller-returning sprintf */
+#define gprintfreturn(buf, bufsize, ...) do { \
+  allocreturn(buf, bufsize); \
+  snprintf(buf, bufsize, ##__VA_ARGS__); \
+} while (0);
+
 
 
 #endif /* _MAIN_H_ */
