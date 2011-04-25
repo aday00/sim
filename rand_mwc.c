@@ -14,6 +14,7 @@
 
 #include "gc.h"
 #include "main.h"
+#include "rand_mwc.h"
 
 int rand_mwc(int datalen)
 {
@@ -195,7 +196,8 @@ int rand_mwc(int datalen)
     I("Program creation returned %d.", ret);
   }
 
-  ret = clBuildProgram(prog, 0, NULL, NULL, NULL, NULL);
+  /* For #include to work, must specify -I option for build */
+  ret = clBuildProgram(prog, 0, NULL, "-I ./", NULL, NULL);
   if (ret != CL_SUCCESS) {
     E("Program build failed %d!", ret);
     allocreturn(progerr_buf,  progerr_bufsize);

@@ -6,6 +6,8 @@
  * https://secure.wikimedia.org/wikipedia/en/wiki/Random_number_generation#Computational_methods
  */
 
+#include "rand_mwc.h"
+
 __kernel
 void rand_mwc(__global const int *in, __global int *out, const unsigned int len) {
   unsigned int mw, mz; /* mz is the "high word", mw is the "low word" */
