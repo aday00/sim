@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "cl_job.h"
 #include "cpu_util.h"
 #include "gc.h"
 #include "main.h"
@@ -47,6 +48,8 @@ int swapmul_gpu(int datalen, int iterations)
   char *buf, **buf_to;
   size_t bufsize = 512;
   sm_t *in, *in_orig, m;
+
+  cljob_ticket job;
 
   size_t global, local; /* memory sizes for gpu calculations */
 
@@ -96,7 +99,7 @@ int swapmul_gpu(int datalen, int iterations)
   allocreturn(fails,  showbytes);
   allocreturn(platform_buf, platform_bufsize);
 
-  ret = clbuild("swapmul.cl", &sourcelen, &source);
+  ret = clbuild(job, "swapmul.cl", &sourcelen, &source);
   if (ret != 0) {
     E("clbuild ret %d\n", ret);
     return -1;

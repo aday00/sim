@@ -11,30 +11,52 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "cl_job.h"
 #include "gc.h"
 #include "main.h"
+#include "queue.h"
 
-typedef struct cljob_s {
-  size_t global, local; /* memory sizes for gpu calculations */
+inline _cljob_t *cljob_from_ticket(cljob_ticket t)
+{
+  return (_cljob_t *) t; /* Trivially convert a ticket to a job */
+}
 
-  cl_device_id     devid;
-  cl_device_type   devtype;
-  cl_platform_id   platform;
-  cl_platform_id  *platforms;
-  cl_uint          platformslen;
-  cl_context       context;
-  cl_command_queue cmdq;
-  cl_program       prog;
-  cl_kernel        kern;
+/* All jobs maintained in this singly-linked list */
+typedef SLIST_HEAD(jobhead_s, _cljob_t) jobhead_t;
+static jobhead_t *jobhead;
+/* Elements of this singly-linked list are of this type */
+typedef struct jobentry_s {
+  cljob_ticket job;
+  SLIST_ENTRY(_cljob_t) entry; /* entry refers to next jobentry in list */
+} jobentry_t;
 
-  cl_mem          *memories;
-} cljob_t;
+/* Call this once at program startup */
+int clinit(void)
+{
+  allocreturn(jobhead, sizeof(jobhead_t));
+  SLIST_INIT(jobhead);
+}
 
-static cljob_t jobs[];
+/* Initialize state for this new job and push to job list */
+int clregister(cljob_ticket job)
+{
+  jobentry_t *je;
+  _cljob_t *jp;
+
+  jp = cljob_from_ticket(job);
+  allocreturn(job, sizeof(_cljob_t));
+  memset(job, 0,   sizeof(_cljob_t));
+
+  allocreturn(je,  sizeof(jobentry_t));
+  je->job = job;
+
+  SLIST_INSERT_HEAD(jobhead, je, entry);
+  return 0;
+}
 
 /* Build source from file named sourcefn, returning sourcelen and source.
  */
-int clbuild(const char *sourcefn, off_t *sourcelen, char **source)
+int clbuild(cljob_ticket job, const char *sourcefn, off_t *sourcelen, char **source)
 {
   /* For reading OpenCL program source */
   FILE *fp;
