@@ -5,6 +5,8 @@
 #ifndef _MAIN_H_
 #define _MAIN_H
 
+#include "gc.h" /* for garbage-collected memory */
+#include "string.h" /* for memset */
 
 
 /* These include paths/filenames differ by environment */
@@ -54,6 +56,11 @@
     return -1; \
   } \
 } while (0);
+#define zallocreturn(bug, size) do { \
+  allocreturn(bug, size); \
+  memset(clhw, 0, size); \
+} while (0);
+
 /* Another, for long sizes */
 #define alloclongreturn(buf, longsize) do { \
   buf = gmalloc(longsize); \
@@ -64,12 +71,25 @@
 } while (0);
 
 
+
 /* Safe quick garbage-collected caller-returning sprintf */
 #define gprintfreturn(buf, bufsize, ...) do { \
   allocreturn(buf, bufsize); \
   snprintf(buf, bufsize, ##__VA_ARGS__); \
 } while (0);
 
+
+/* Similar pattern: call a function, complain if error, and return. */
+#define callreturn(invoke) { \
+  int __r; \
+  do { \
+    __r = (invoke); \
+    if (__r) { \
+      E("%s returned %d", #invoke, __r); \
+      return __r; \
+    } \
+  } while (0); \
+}
 
 
 #endif /* _MAIN_H_ */

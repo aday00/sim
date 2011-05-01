@@ -50,6 +50,7 @@ int swapmul_gpu(int datalen, int iterations)
   sm_t *in, *in_orig, m;
 
   cljob_ticket job;
+  clbuf_ticket bufin, bufout;
 
   size_t global, local; /* memory sizes for gpu calculations */
 
@@ -99,11 +100,8 @@ int swapmul_gpu(int datalen, int iterations)
   allocreturn(fails,  showbytes);
   allocreturn(platform_buf, platform_bufsize);
 
-  ret = clbuild(job, "swapmul.cl", &sourcelen, &source);
-  if (ret != 0) {
-    E("clbuild ret %d\n", ret);
-    return -1;
-  }
+  callreturn( clregister(job) );
+  callreturn( clbuild(job, "swapmul.cl", "swapmul") );
 
   /* Input for GPU, input cannot be 0 */
   for (u = 0; u <= sm_len; u++ ) {
@@ -112,198 +110,33 @@ int swapmul_gpu(int datalen, int iterations)
   }
   dump_gpu(in, out, sm_len);
 
-  /***
-   * Setup GPU
-   */
 
-  /* Get platform before getdeviceids
-   * http://developer.amd.com/Support/KnowledgeBase/Lists/KnowledgeBase/DispForm.aspx?ID=71
-   */
-  ret = clGetPlatformIDs(0, NULL, &platformslen);
-  if (ret != CL_SUCCESS) {
-    E("clGetPlatformIDs returned %d, output num platforms %d.",
-      ret, platformslen);
-    return -1;
-  }
-  if (platformslen <= 0) {
-    E("Number of OpenCL platform IDs is %d!", platformslen);
-    return -1;
-  }
+  callreturn( clkargbuf(job, CL_MEM_READ_WRITE, sm_bytes,  in,
+                        CL_TRUE, bufin) );
+  callreturn( clkargbuf(job, CL_MEM_WRITE_ONLY, databytes, out,
+                        CL_TRUE, bufout) );
+  callreturn( clkargscalar(job, sizeof(int), &sm_len) );
 
-  allocreturn(platforms, sizeof(cl_platform_id) * platformslen);
-  ret = clGetPlatformIDs(platformslen, platforms, NULL);
-  if (ret != CL_SUCCESS) {
-    E("clGetPlatformIDs returned %d, given num platforms %d",
-      ret, platformslen);
-    return -1;
-  }
-  for (i = 0; i < platformslen; i++) {
-    ret = clGetPlatformInfo(platforms[i], CL_PLATFORM_VENDOR, platform_bufsize,
-                            platform_buf, NULL);
-    I("clGetPlatformInfo[%d] returned %d platform %s", i, ret, platform_buf);
-    if (ret == CL_SUCCESS) {
-      /* TBD: allow use of more than one available platform. */
-      platform = platforms[i];
-    }
-  }
-
-  devtype = gpu ? CL_DEVICE_TYPE_GPU : CL_DEVICE_TYPE_CPU;
-  ret = clGetDeviceIDs(platform, devtype, 1, &devid, NULL);
-  if (ret != CL_SUCCESS) {
-    E("Device group creation failed %d", ret);
-    return -1;
-  }
-
-  if (platform != NULL) {
-    /* Platform found, use it. */
-    cl_context_properties cps[3] = {
-      CL_CONTEXT_PLATFORM, 
-      (cl_context_properties)platform, 
-      0
-    };
-    context = clCreateContextFromType(cps, devtype, NULL, NULL, &ret);
-    if (context) {
-      if (ret != CL_SUCCESS) {
-        I("Type-based compute context creation returned %d", ret);
-      }
-    } else {
-      E("Type-based compute context creation failed %d!", ret);
-      /* Fall through to default context creation method */
-    }
-  }
-  if (platform == NULL || context == NULL) {
-    /* Use default platform.  Tends to fail. */
-    context = clCreateContext(0, 1, &devid, NULL, NULL, &ret);
-    if (context) {
-      if (ret != CL_SUCCESS) {
-        I("Default compute context creation returned %d", ret);
-      }
-    } else {
-      E("Default compute context creation failed %d!", ret);
-      return -1;
-    }
-  }
-
-  /***
-   * Build GPU program
-   */
-
-  cmdq = clCreateCommandQueue(context, devid, 0, &ret);
-  if (cmdq) {
-    if (ret != CL_SUCCESS) {
-      I("Command queue creation returned %d", ret);
-    }
-  } else {
-    E("Command queue creation failed %d!", ret);
-    return -1;
-  }
-
-  prog = clCreateProgramWithSource(context, 1, (const char **)&source, NULL,
-                                   &ret);
-  if (!prog) {
-    E("Program creation failed %d!", ret);
-    return -1;
-  } else if (ret != CL_SUCCESS) {
-    I("Program creation returned %d.", ret);
-  }
-
-  /* For #include to work, must specify -I option for build */
-  ret = clBuildProgram(prog, 0, NULL, "-I ./", NULL, NULL);
-  if (ret != CL_SUCCESS) {
-    E("Program build failed %d!", ret);
-    allocreturn(progerr_buf, progerr_bufsize);
-    clGetProgramBuildInfo(prog, devid, CL_PROGRAM_BUILD_LOG, progerr_bufsize,
-                          progerr_buf, &progerr_buflen);
-    E("Build info follows:\n%s", progerr_buf);
-    return -1;
-  }
-
-  kern = clCreateKernel(prog, "swapmul", &ret);
-  if (!kern || ret != CL_SUCCESS) {
-    E("Kernel creation failed %d!", ret);
-    return -1;
-  }
-
-  gpuin = clCreateBuffer(context,  CL_MEM_READ_WRITE, sm_bytes, NULL, &ret);
-  if (!gpuin) {
-    E("Input buffer creation on device failed %d!", ret);
-    return -1;
-  } else if (ret != CL_SUCCESS) {
-    I("Input buffer creation on device returned %d", ret);
-  }
-  gpuout = clCreateBuffer(context, CL_MEM_WRITE_ONLY, databytes, NULL, &ret);
-  if (!gpuout) {
-    E("Output buffer creation on device failed %d!", ret);
-    return -1;
-  } else if (ret != CL_SUCCESS) {
-    I("Output buffer creation on device returned %d", ret);
-  }
-
-  ret = clEnqueueWriteBuffer(cmdq, gpuin, CL_TRUE, 0, sm_bytes, in, 0, NULL,
-                             NULL);
-  if (ret != CL_SUCCESS) {
-    E("Buffer write failed %d!", ret);
-    return -1;
-  }
-
-#define kernarg(kern, idx, var, size) do { \
-  ret = clSetKernelArg(kern, idx, size, var); \
-  if (ret != CL_SUCCESS) { \
-    E("Kernel argument %d set failed %d!", idx, ret); \
-    return -1; \
-  } \
-} while(0);
-  kernarg(kern, 0, &gpuin,  sizeof(cl_mem));
-  kernarg(kern, 1, &gpuout, sizeof(cl_mem));
-  kernarg(kern, 2, &sm_len, sizeof(int));
-
-  ret = clGetKernelWorkGroupInfo(kern, devid, CL_KERNEL_WORK_GROUP_SIZE,
-                                 sizeof(local), &local, NULL);
-  if (ret != CL_SUCCESS) {
-      E("Max work group size retrieval failed %d!", ret);
-      return -1;
-  }
+  callreturn( clkargbufw(bufin) );
 
   /***
    * Run GPU kernel, read output, then release resources.
    */
 
-  global = sm_bytes;
-#define clreturn(func, arg) do { \
-  ret = func(arg); \
-  if (ret != CL_SUCCESS) { \
-    E("%s error %d!", #func, ret); \
-    return -1; \
-  } \
-} while (0);
+  callreturn( clmemory(job, sm_bytes) );
+
   printf("i %d iter %d\n", i, iterations);
   for (i = 0; i < iterations; i++) {
-    ret = clEnqueueNDRangeKernel(cmdq, kern, 1, NULL, &global, &local, 0, NULL,
-                                NULL);
-    if (ret != CL_SUCCESS) {
-        E("Kernel exec failed %d!", ret);
-        return -1;
-    }
+    callreturn( clkernel(job) );
     /* Read results */
-    ret = clEnqueueReadBuffer(cmdq, gpuout, CL_TRUE, 0, databytes, out, 0, NULL, NULL );
-    if (ret != CL_SUCCESS) {
-      E("Output read failed %d!", ret);
-      return -1;
-    }
+    callreturn( clkargbufr(bufout) );
     printf("\niteration %d/%d\n", i+1, iterations);
     dump_gpu(in, out, sm_len);
   }
 
-  clreturn(clFlush,  cmdq); /* Issue enqueued commands */
-  clreturn(clFinish, cmdq); /* Block until all commands complete */
-
-  //dump_gpu(in, out, sm_len);
-  clreturn(clReleaseKernel,       kern);
-  clreturn(clReleaseProgram,      prog);
-  clreturn(clReleaseMemObject,    gpuin);
-  clreturn(clReleaseMemObject,    gpuout);
-  clreturn(clReleaseCommandQueue, cmdq);
-  clreturn(clReleaseContext,      context);
+  callreturn( clunregister(job) );
+  callreturn( clunbuf(bufin)    );
+  callreturn( clunbuf(bufout)   );
 
   /***
    * Validate results, print report

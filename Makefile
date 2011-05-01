@@ -12,7 +12,8 @@ CL_LIB=/usr/lib/nvidia-current
 # C flags to build non-third-party programs
 GC_CFLAGS=-Ilib/gc/include -Llib/gc/lib -lgc
 CL_CFLAGS=-I$(CL_INC) -L$(CL_LIB) -lOpenCL
-GEN_CFLAGS=$(GC_CFLAGS) $(CL_CFLAGS)
+GDB_CFLAGS=-ggdb
+GEN_CFLAGS=$(GC_CFLAGS) $(CL_CFLAGS) $(GDB_CFLAGS)
 
 all: main
 

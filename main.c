@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "cl_job.h"
 #include "main.h"
 
 void usage(void) {
@@ -40,6 +41,7 @@ int main(int argc, char** argv)
   }
 
   ginit();
+  clinit();
   printf("hello, datalen is %d\n", datalen);
 /*  sum(datalen); */
 /*  rand_mwc(datalen); */
