@@ -342,6 +342,8 @@ int clkargbuf(cljob_ticket job, cl_mem_flags flags, size_t hostbytes,
   cl_mem    devmem;
   cl_uint   kargc;
 
+  allocreturn(hostmem, hostbytes); /* allocate memory for the host */
+
   allocreturn(bp, sizeof(_clbuf_t));
   jp = cljob_from_ticket(job);
 
@@ -462,6 +464,7 @@ int clunregister(cljob_ticket job)
   clreturn(clReleaseKernel,       jp->kern);
   clreturn(clReleaseProgram,      jp->prog);
   clreturn(clReleaseCommandQueue, jp->cmdq);
+  clreturn(clReleaseContext,      clsw->context);
 
   return 0;
 }
@@ -475,22 +478,16 @@ int clunbuf(clbuf_ticket buf)
   return 0;
 }
 
-int clexit(void) {
-  int ret;
-
+/* Calling this shouldn't be neccessary due to garbage collection */
+int clexit(void)
+{
   if (jobhead != NULL) {
     gfree(jobhead);
   }
   if (clsw != NULL) {
-    if (clsw->context != NULL) {
-      clreturn(clReleaseContext,      clsw->context);
-    }
     gfree(clsw);
   }
   if (clhw != NULL) {
-    if (clhw->platforms != NULL) {
-      gfree(clhw->platforms);
-    }
     gfree(clhw);
   }
 }
