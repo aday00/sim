@@ -45,6 +45,7 @@
 /* Aliases for gc.h's functions */
 #define ginit   GC_init
 #define gmalloc GC_malloc
+#define gfree   GC_free
 
 
 
@@ -56,9 +57,9 @@
     return -1; \
   } \
 } while (0);
-#define zallocreturn(bug, size) do { \
-  allocreturn(bug, size); \
-  memset(clhw, 0, size); \
+#define zallocreturn(buf, size) do { \
+  allocreturn(buf, size); \
+  memset(buf, 0, size); \
 } while (0);
 
 /* Another, for long sizes */

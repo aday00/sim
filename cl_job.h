@@ -35,7 +35,6 @@ typedef _clbuf_t *clbuf_ticket; /* user interface */
 
 
 extern int clinit(void);
-
 extern int clregister(cljob_ticket job);
 extern int clbuild(cljob_ticket job, const char *sourcefn,
                    const char *kernelfunc);
@@ -52,5 +51,6 @@ extern int clkernel(cljob_ticket job);
 
 extern int clunregister(cljob_ticket job);
 extern int clunbuf(clbuf_ticket buf);
+extern int clexit(void);
 
 #endif /* __CL_JOB_H__ */

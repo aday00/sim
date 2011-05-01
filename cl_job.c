@@ -82,6 +82,7 @@ int _clinithw(void)
       ret, platformslen);
     return -1;
   }
+  allocreturn(platform_buf, platform_bufsize);
   for (i = 0; i < platformslen; i++) {
     ret = clGetPlatformInfo(platforms[i], CL_PLATFORM_VENDOR, platform_bufsize,
                             platform_buf, NULL);
@@ -461,7 +462,6 @@ int clunregister(cljob_ticket job)
   clreturn(clReleaseKernel,       jp->kern);
   clreturn(clReleaseProgram,      jp->prog);
   clreturn(clReleaseCommandQueue, jp->cmdq);
-  clreturn(clReleaseContext,      clsw->context);
 
   return 0;
 }
@@ -473,4 +473,24 @@ int clunbuf(clbuf_ticket buf)
 
   clreturn(clReleaseMemObject, bp->hostmem);
   return 0;
+}
+
+int clexit(void) {
+  int ret;
+
+  if (jobhead != NULL) {
+    gfree(jobhead);
+  }
+  if (clsw != NULL) {
+    if (clsw->context != NULL) {
+      clreturn(clReleaseContext,      clsw->context);
+    }
+    gfree(clsw);
+  }
+  if (clhw != NULL) {
+    if (clhw->platforms != NULL) {
+      gfree(clhw->platforms);
+    }
+    gfree(clhw);
+  }
 }
