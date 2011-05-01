@@ -8,34 +8,16 @@
 #define __CL_JOB_H__
 
 #include "main.h"
-
-typedef struct _cljob_s {
-  /* XXX: maintain a linked list of buffers for freeing at unreg-time */
-
-  size_t global, local; /* memory sizes for gpu calculations */
-
-  cl_command_queue cmdq;
-  cl_program       prog;
-  cl_kernel        kern;
-} _cljob_t;
+//#include "cl_job_private.h"
 
 /* This is how Users refer to their job, an "opaque" ticket */
-typedef _cljob_t *cljob_ticket; /* user interface */
-
-typedef struct _clbuf_s {
-  cl_mem        devmem;    /* gpu memory */
-  size_t        hostbytes; /* host many bytes hostmem is in total */
-  void         *hostmem;   /* cpu memory */
-  cl_bool       blocking;  /* blocking read/write */
-  cljob_ticket  job;       /* job that this clbuf belongs to */
-} _clbuf_t;
+typedef struct _cljob_s *cljob_ticket; /* user interface */
 
 /* This is how Users refer to an IO buffer for their app */
-typedef _clbuf_t *clbuf_ticket; /* user interface */
-
+typedef struct _clbuf_s *clbuf_ticket; /* user interface */
 
 extern int clinit(void);
-extern int clregister(cljob_ticket job);
+extern int clregister(cljob_ticket *job); /* fills in job */
 extern int clbuild(cljob_ticket job, const char *sourcefn,
                    const char *kernelfunc);
 
@@ -50,7 +32,6 @@ extern int clmemory(cljob_ticket job, size_t globalbytes);
 extern int clkernel(cljob_ticket job);
 
 extern int clunregister(cljob_ticket job);
-extern int clunbuf(clbuf_ticket buf);
 extern int clexit(void);
 
 #endif /* __CL_JOB_H__ */

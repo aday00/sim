@@ -53,12 +53,12 @@ int swapmul_gpu(int datalen, int iterations)
   databytes = sizeof(int) * datalen;
 
   /* Create job, building program and alloating buffers. */
-  callreturn( clregister(job) );
+  callreturn( clregister(&job) );
   callreturn( clbuild(job, "swapmul.cl", "swapmul") );
 
   /* Input and output buffers for GPU */
-  allocreturn(in,     sm_bytes);
-  allocreturn(out,    databytes);
+  allocreturn(in,  sm_bytes);
+  allocreturn(out, databytes);
   for (u = 0; u <= sm_len; u++ ) {
     v = u * rands_per_generator;
     in[u] = (sm_t) { v+1, v+2 };
@@ -84,8 +84,6 @@ int swapmul_gpu(int datalen, int iterations)
     dump_gpu(in, out, sm_len);
   }
   callreturn( clunregister(job) );
-  callreturn( clunbuf(bufin)    );
-  callreturn( clunbuf(bufout)   );
   return 0;
 }
 int swapmul_cpu(int datalen, int iterations)

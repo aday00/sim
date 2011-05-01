@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include "cl_job.h"
+#include "cl_job_private.h"
 #include "gc.h"
 #include "main.h"
 #include "queue.h"
@@ -41,7 +42,7 @@ inline _cljob_t *cljob_from_ticket(cljob_ticket t)
 
 /* Elements of the singly-linked list of jobs are of this type */
 typedef struct jobentry_s {
-  cljob_ticket job;
+  cljob_ticket            job;
   SLIST_ENTRY(jobentry_s) entry; /* entry points to next jobentry in list */
 } jobentry_t;
 /* All jobs maintained in this singly-linked list */
@@ -182,16 +183,20 @@ int clinit(void)
 }
 
 /* Initialize state for this new job and push to job list */
-int clregister(cljob_ticket job)
+int clregister(cljob_ticket *jobptr)
 {
   jobentry_t *je;
-  _cljob_t *jp;
+  _cljob_t   *jp;
+  bufhead_t  *bh;
 
-  jp = cljob_from_ticket(job);
+  allocreturn( je, sizeof(jobentry_t));
   zallocreturn(jp, sizeof(_cljob_t));
+  allocreturn( bh, sizeof(bufhead_t));
+  SLIST_INIT(bh);
 
-  allocreturn(je,  sizeof(jobentry_t));
-  je->job = job;
+  jp->bufhead = bh;
+  *jobptr     = jp;
+  je->job     = jp;
 
   SLIST_INSERT_HEAD(jobhead, je, entry);
   return 0;
@@ -363,7 +368,7 @@ int clkargbuf(cljob_ticket job, cl_mem_flags flags, size_t hostbytes,
   bp->hostbytes = hostbytes;
   bp->hostmem   = hostmem;
   bp->blocking  = blocking;
-  bp->job       = job;
+  bp->jobptr    = jp;
 
   buf = (clbuf_ticket)bp;
   return 0;
@@ -376,9 +381,10 @@ int clkargbufw(clbuf_ticket buf)
 
   _cljob_t *jp;
   _clbuf_t *bp;
+  bufentry_t *be;
 
   bp = clbuf_from_ticket(buf);
-  jp = cljob_from_ticket(bp->job);
+  jp = bp->jobptr;
 
   ret = clEnqueueWriteBuffer(clsw->cmdq, bp->devmem, bp->blocking, 0,
                              bp->hostbytes, bp->hostmem, 0, NULL, NULL);
@@ -386,6 +392,10 @@ int clkargbufw(clbuf_ticket buf)
     E("Buffer write failed %d!", ret);
     return -1;
   }
+
+  /* Place buffer on list of buffers to release on job teardown */
+  allocreturn(be, sizeof(bufentry_t));
+  SLIST_INSERT_HEAD(jp->bufhead, be, entry);
   return 0;
 }
 /* Enqueue a read buffer */
@@ -397,7 +407,7 @@ int clkargbufr(clbuf_ticket buf)
   _clbuf_t *bp;
 
   bp = clbuf_from_ticket(buf);
-  jp = cljob_from_ticket(bp->job);
+  jp = bp->jobptr;
 
   ret = clEnqueueReadBuffer(clsw->cmdq, bp->devmem, bp->blocking, 0,
                             bp->hostbytes, bp->hostmem, 0, NULL, NULL);
@@ -454,8 +464,9 @@ int clkernel(cljob_ticket job)
 int clunregister(cljob_ticket job)
 {
   int ret;
-
   _cljob_t *jp;
+  bufentry_t *be;
+
   jp = cljob_from_ticket(job);
 
   clreturn(clFlush,  jp->cmdq); /* Issue enqueued commands */
@@ -463,18 +474,14 @@ int clunregister(cljob_ticket job)
 
   clreturn(clReleaseKernel,       jp->kern);
   clreturn(clReleaseProgram,      jp->prog);
+
+  SLIST_FOREACH(be, jp->bufhead, entry) {
+    clreturn(clReleaseMemObject, be->buf->hostmem);
+  }
+
   clreturn(clReleaseCommandQueue, jp->cmdq);
   clreturn(clReleaseContext,      clsw->context);
 
-  return 0;
-}
-int clunbuf(clbuf_ticket buf)
-{
-  int ret;
-  _clbuf_t *bp;
-  bp = clbuf_from_ticket(buf);
-
-  clreturn(clReleaseMemObject, bp->hostmem);
   return 0;
 }
 
