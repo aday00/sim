@@ -36,7 +36,11 @@ rand_mwc.o: rand_mwc.c
 sum.o: sum.c
 	$(CC) $(GEN_CFLAGS) -c sum.c -o sum.o
 
-main: main.c rand_mwc.o sum.o
-	$(CC) $(GEN_CFLAGS) -lm main.c rand_mwc.o sum.o -o main
+swapmul.o: swapmul.c
+	$(CC) $(GEN_CFLAGS) -c swapmul.c -o swapmul.o
+
+
+main: main.c rand_mwc.o sum.o swapmul.o
+	$(CC) $(GEN_CFLAGS) -lm main.c rand_mwc.o sum.o swapmul.o -o main
 
 
