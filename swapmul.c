@@ -62,19 +62,14 @@ int swapmul_gpu(int datalen, int iterations)
 
   cl_mem gpuin, gpuout; /* device memory for input and output arys */
 
+  off_t sourcelen;
+  char *source;
+
   int gpu = 1; /* use gpu opencl, not cpu opencl */
   char *platform_buf;
   int platform_bufsize = 128;
   char *progerr_buf;
   size_t progerr_bufsize = 2048, progerr_buflen;
-
-  /* For reading OpenCL program source */
-  FILE *fp;
-  struct stat info;
-  char *source;
-  char *sourcefn = "swapmul.cl";
-  off_t sourcelen;
-  size_t sourceread;
 
   rands_per_generator = 2; /* Each pRNG creates this many randoms */
   num_generators = datalen / rands_per_generator;
@@ -101,30 +96,11 @@ int swapmul_gpu(int datalen, int iterations)
   allocreturn(fails,  showbytes);
   allocreturn(platform_buf, platform_bufsize);
 
-  ret = stat(sourcefn, &info);
-  if (ret) {
-    E("Could not get status of file %s, ret %d, err %d", sourcefn, ret, errno);
+  ret = clbuild("swapmul.cl", &sourcelen, &source);
+  if (ret != 0) {
+    E("clbuild ret %d\n", ret);
     return -1;
   }
-  sourcelen = info.st_size; /* filesize of source */
-  if (sourcelen <= 0) {
-    E("File %s length of %ld invalid!", sourcefn, sourcelen);
-    return -1;
-  }
-
-  fp = fopen(sourcefn, "r");
-  if (!fp) {
-    E("Failed to read program source file %s, err %d", sourcefn, errno);
-    return -1;
-  }
-  alloclongreturn(source, sourcelen);
-  sourceread = fread(source, 1, sourcelen, fp);
-  if (sourceread < sourcelen) {
-    E("Program source read of %s returned %d bytes!  Source is %ld bytes.",
-      sourcefn, sourceread, sourcelen);
-    return -1; /* Cannot expect to continue */
-  }
-  I("Source in %s follows:\n%s", sourcefn, source);
 
   /* Input for GPU, input cannot be 0 */
   for (u = 0; u <= sm_len; u++ ) {

@@ -30,6 +30,10 @@ clean:
 mrproper: clean
 	rm -rf $(GC_LIB)
 
+
+cl_job.o: util.c
+	$(CC) $(GEN_CFLAGS) -c cl_job.c -o cl_job.o
+
 rand_mwc.o: rand_mwc.c
 	$(CC) $(GEN_CFLAGS) -c rand_mwc.c -o rand_mwc.o
 
@@ -39,8 +43,11 @@ sum.o: sum.c
 swapmul.o: swapmul.c
 	$(CC) $(GEN_CFLAGS) -c swapmul.c -o swapmul.o
 
+util.o: util.c
+	$(CC) -c util.c -o util.o
 
-main: main.c rand_mwc.o sum.o swapmul.o
-	$(CC) $(GEN_CFLAGS) -lm main.c rand_mwc.o sum.o swapmul.o -o main
+
+main: main.c cl_job.o rand_mwc.o sum.o swapmul.o util.o
+	$(CC) $(GEN_CFLAGS) -lm main.c cl_job.o rand_mwc.o sum.o swapmul.o util.o -o main
 
 

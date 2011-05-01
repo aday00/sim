@@ -1,5 +1,5 @@
 /*
- * rand.cl  Copyright 2011 Andrew Schaumberg
+ * swapmul.cl  Copyright 2011 Andrew Schaumberg
  *
  * Multiply-with-carry pRNG in the method of George Marsaglia.
  * This subroutine adapted from:
