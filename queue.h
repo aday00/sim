@@ -37,7 +37,12 @@
 #ifndef _SYS_QUEUE_H_
 #define _SYS_QUEUE_H_
 
+#ifdef __GNUC__ /* Linux */
+#include <stddef.h>
+#define __offsetof(type, member)        offsetof(type, member)
+#else /* BSD, kernel? */
 #include <machine/ansi.h>       /* for __offsetof */
+#endif
 
 /*
  * This file defines five types of data structures: singly-linked lists,
