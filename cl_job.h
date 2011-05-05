@@ -24,7 +24,7 @@ extern int clbuild(cljob_ticket job, const char *sourcefn,
 extern int clkargscalar(cljob_ticket job, size_t scalarbytes,
                         const void *scalarp);
 extern int clkargbuf(   cljob_ticket job, cl_mem_flags flags, size_t hostbytes,
-                        void *hostmem, cl_bool blocking, clbuf_ticket buf);
+                        void *hostmem, cl_bool blocking, clbuf_ticket *buf);
 extern int clkargbufw(clbuf_ticket buf);
 extern int clkargbufr(clbuf_ticket buf);
 

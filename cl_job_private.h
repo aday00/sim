@@ -21,7 +21,7 @@ typedef SLIST_HEAD(bufhead_s, bufentry_s) bufhead_t;
 
 typedef struct _cljob_s {
   size_t global, local; /* memory sizes for gpu calculations */
-  cl_command_queue cmdq;
+  //cl_command_queue cmdq;
   cl_program       prog;
   cl_kernel        kern;
 

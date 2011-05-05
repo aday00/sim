@@ -59,6 +59,8 @@ int swapmul_gpu(int datalen, int iterations)
   /* Input and output buffers for GPU */
   allocreturn(in,  sm_bytes);
   allocreturn(out, databytes);
+//  in = malloc(sizeof(sm_bytes));
+//  out= malloc(sizeof(databytes));
   for (u = 0; u <= sm_len; u++ ) {
     v = u * rands_per_generator;
     in[u] = (sm_t) { v+1, v+2 };
@@ -67,14 +69,23 @@ int swapmul_gpu(int datalen, int iterations)
 
   /* Set up kernel arguments, and memory layout. */
   callreturn( clkargbuf(job, CL_MEM_READ_WRITE, sm_bytes,  in,
-                        CL_TRUE, bufin) );
+                        CL_TRUE, &bufin) );
+  printf("DBGa CL_TRUE is %d\n", CL_TRUE);
   callreturn( clkargbuf(job, CL_MEM_WRITE_ONLY, databytes, out,
-                        CL_TRUE, bufout) );
+                        CL_TRUE, &bufout) );
+  printf("DBGb\n");
   callreturn( clkargscalar(job, sizeof(int), &sm_len) );
+  printf("DBGc\n");
   callreturn( clmemory(job, sm_bytes) );
+  printf("DBGd\n");
 
   /* Write memory, run GPU kernel, read output, then release resources. */
+    callreturn( clkernel(job) );
+    printf("out\n");
+  dump_gpu(in, out, sm_len);
+//  return 0;
   callreturn( clkargbufw(bufin) );
+  printf("DBGe\n");
   printf("i %d iter %d\n", i, iterations);
   for (i = 0; i < iterations; i++) {
     callreturn( clkernel(job) );

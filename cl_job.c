@@ -22,8 +22,8 @@ typedef struct clhw_s {
   cl_device_id     devid;
   cl_device_type   devtype;
   cl_platform_id   platform;
-  cl_platform_id  *platforms;
   cl_uint          platformslen;
+  cl_platform_id  *platforms;
 } clhw_t;
 clhw_t *clhw;
 
@@ -56,65 +56,51 @@ int _clinithw(void)
   char *platform_buf;
   int platform_bufsize = 128;
 
-  cl_device_id     devid;
-  cl_device_type   devtype;
-  cl_platform_id   platform;
-  cl_platform_id  *platforms;
-  cl_uint          platformslen;
-
   /* Get platform before getdeviceids
    * http://developer.amd.com/Support/KnowledgeBase/Lists/KnowledgeBase/DispForm.aspx?ID=71
    */
-  ret = clGetPlatformIDs(0, NULL, &platformslen);
+  ret = clGetPlatformIDs(0, NULL, &clhw->platformslen);
   if (ret != CL_SUCCESS) {
     E("clGetPlatformIDs returned %d, output num platforms %d.",
-      ret, platformslen);
+      ret, clhw->platformslen);
     return -1;
   }
-  if (platformslen <= 0) {
-    E("Number of OpenCL platform IDs is %d!", platformslen);
+  if (clhw->platformslen <= 0) {
+    E("Number of OpenCL platform IDs is %d!", clhw->platformslen);
     return -1;
   }
 
-  allocreturn(platforms, sizeof(cl_platform_id) * platformslen);
-  ret = clGetPlatformIDs(platformslen, platforms, NULL);
+  allocreturn(clhw->platforms, sizeof(cl_platform_id) * clhw->platformslen);
+  ret = clGetPlatformIDs(clhw->platformslen, clhw->platforms, NULL);
   if (ret != CL_SUCCESS) {
     E("clGetPlatformIDs returned %d, given num platforms %d",
-      ret, platformslen);
+      ret, clhw->platformslen);
     return -1;
   }
   allocreturn(platform_buf, platform_bufsize);
-  for (i = 0; i < platformslen; i++) {
-    ret = clGetPlatformInfo(platforms[i], CL_PLATFORM_VENDOR, platform_bufsize,
+  for (i = 0; i < clhw->platformslen; i++) {
+    ret = clGetPlatformInfo(clhw->platforms[i], CL_PLATFORM_VENDOR, platform_bufsize,
                             platform_buf, NULL);
     I("clGetPlatformInfo[%d] returned %d platform %s", i, ret, platform_buf);
     if (ret == CL_SUCCESS) {
       /* TBD: allow use of more than one available platform. */
-      platform = platforms[i];
+      clhw->platform = clhw->platforms[i];
     }
   }
 
   /* TBD: provide interface to toggle "gpu" variable */
-  devtype = gpu ? CL_DEVICE_TYPE_GPU : CL_DEVICE_TYPE_CPU;
-  ret = clGetDeviceIDs(platform, devtype, 1, &devid, NULL);
+  clhw->devtype = gpu ? CL_DEVICE_TYPE_GPU : CL_DEVICE_TYPE_CPU;
+  ret = clGetDeviceIDs(clhw->platform, clhw->devtype, 1, &clhw->devid, NULL);
   if (ret != CL_SUCCESS) {
     E("Device group creation failed %d", ret);
     return -1;
   }
 
-  clhw->platformslen = platformslen;
-  clhw->platforms = platforms;
-  clhw->platform  = platform;
-  clhw->devtype = devtype;
-  clhw->devid   = devid;
   return 0;
 }
 int _clinitsw(void)
 {
   int ret;
-
-  cl_context       ctx;
-  cl_command_queue cmdq;
 
   if (clhw->platform != NULL) {
     /* Platform found, use it. */
@@ -123,8 +109,8 @@ int _clinitsw(void)
       (cl_context_properties)clhw->platform, 
       0
     };
-    ctx = clCreateContextFromType(cps, clhw->devtype, NULL, NULL, &ret);
-    if (ctx) {
+    clsw->context = clCreateContextFromType(cps, clhw->devtype, NULL, NULL, &ret);
+    if (clsw->context) {
       if (ret != CL_SUCCESS) {
         I("Type-based compute context creation returned %d", ret);
       }
@@ -133,10 +119,10 @@ int _clinitsw(void)
       /* Fall through to default context creation method */
     }
   }
-  if (clhw->platform == NULL || ctx == NULL) {
+  if (clhw->platform == NULL || clsw->context == NULL) {
     /* Use default platform.  Tends to fail. */
-    ctx = clCreateContext(0, 1, &clhw->devid, NULL, NULL, &ret);
-    if (ctx) {
+    clsw->context = clCreateContext(0, 1, &clhw->devid, NULL, NULL, &ret);
+    if (clsw->context) {
       if (ret != CL_SUCCESS) {
         I("Default compute context creation returned %d", ret);
       }
@@ -146,8 +132,8 @@ int _clinitsw(void)
     }
   }
 
-  cmdq = clCreateCommandQueue(ctx, clhw->devid, 0, &ret);
-  if (cmdq) {
+  clsw->cmdq = clCreateCommandQueue(clsw->context, clhw->devid, 0, &ret);
+  if (clsw->cmdq) {
     if (ret != CL_SUCCESS) {
       I("Command queue creation returned %d", ret);
     }
@@ -156,8 +142,6 @@ int _clinitsw(void)
     return -1;
   }
 
-  clsw->cmdq    = cmdq;
-  clsw->context = ctx;
   return 0;
 }
 
@@ -250,9 +234,18 @@ int clbuild(cljob_ticket job, const char *sourcefn, const char *kernelfunc)
 
   _cljob_t *jp;
 
+#if 0
   cl_command_queue cmdq;
   cl_program       prog;
   cl_kernel        kern;
+  jp = cljob_from_ticket(job);
+  jp->cmdq = cmdq;
+  jp->prog = prog;
+  jp->kern = kern;
+  jp->global = 0;
+  jp->local  = 0;
+
+#endif
 
   char *progerr_buf;
   size_t progerr_bufsize = 2048, progerr_buflen;
@@ -268,10 +261,11 @@ int clbuild(cljob_ticket job, const char *sourcefn, const char *kernelfunc)
   /***
    * Build GPU program
    */
+  jp = cljob_from_ticket(job);
 
-  prog = clCreateProgramWithSource(clsw->context, 1, (const char **)&source,
+  jp->prog = clCreateProgramWithSource(clsw->context, 1, (const char **)&source,
                                    NULL, &ret);
-  if (!prog) {
+  if (!jp->prog) {
     E("Program creation failed %d!", ret);
     return -1;
   } else if (ret != CL_SUCCESS) {
@@ -279,28 +273,23 @@ int clbuild(cljob_ticket job, const char *sourcefn, const char *kernelfunc)
   }
 
   /* For #include to work, must specify -I option for build */
-  ret = clBuildProgram(prog, 0, NULL, "-I ./", NULL, NULL);
+  ret = clBuildProgram(jp->prog, 0, NULL, "-I ./", NULL, NULL);
   if (ret != CL_SUCCESS) {
     E("Program build failed %d!", ret);
     allocreturn(progerr_buf, progerr_bufsize);
-    clGetProgramBuildInfo(prog, clhw->devid, CL_PROGRAM_BUILD_LOG,
+    clGetProgramBuildInfo(jp->prog, clhw->devid, CL_PROGRAM_BUILD_LOG,
                           progerr_bufsize, progerr_buf, &progerr_buflen);
     E("Build info follows:\n%s", progerr_buf);
     return -1;
   }
 
-  kern = clCreateKernel(prog, kernelfunc, &ret);
-  if (!kern || ret != CL_SUCCESS) {
+  jp->kern = clCreateKernel(jp->prog, kernelfunc, &ret);
+  if (!jp->kern || ret != CL_SUCCESS) {
     E("Kernel creation failed %d!", ret);
     return -1;
   }
 
-  jp = cljob_from_ticket(job);
-  jp->cmdq = cmdq;
-  jp->prog = prog;
-  jp->kern = kern;
-  jp->global = 0;
-  jp->local  = 0;
+
   return 0;
 }
 
@@ -338,18 +327,23 @@ int clkargscalar(cljob_ticket job, size_t scalarbytes, const void *scalarp)
  * Reads and writes to this buffer are allowed through the clbuf_ticket.
  */
 int clkargbuf(cljob_ticket job, cl_mem_flags flags, size_t hostbytes,
-              void *hostmem, cl_bool blocking, clbuf_ticket buf)
+              void *hostmem, cl_bool blocking, clbuf_ticket *buf)
 {
   int ret;
 
   _cljob_t *jp;
   _clbuf_t *bp;
+  bufentry_t *be;
   cl_mem    devmem;
   cl_uint   kargc;
 
-  allocreturn(hostmem, hostbytes); /* allocate memory for the host */
+//#define dbgbuf 1
+#ifdef dbgbuf
+  int *h, i;
+#endif
 
   allocreturn(bp, sizeof(_clbuf_t));
+
   jp = cljob_from_ticket(job);
 
   devmem = clCreateBuffer(clsw->context, flags, hostbytes, NULL, &ret);
@@ -359,18 +353,28 @@ int clkargbuf(cljob_ticket job, cl_mem_flags flags, size_t hostbytes,
   } else if (ret != CL_SUCCESS) {
     I("Input buffer creation on device returned %d", ret);
   }
-
-  kargc = clsw->kargc;
-  clsw->kargc = kargc + 1;
-  kernargreturn(jp->kern, kargc, sizeof(cl_mem), &devmem);
-
   bp->devmem    = devmem;
   bp->hostbytes = hostbytes;
   bp->hostmem   = hostmem;
   bp->blocking  = blocking;
   bp->jobptr    = jp;
 
-  buf = (clbuf_ticket)bp;
+#ifdef dbgbuf
+  h = hostmem;
+    for(i = 0; i < 100; i++) {
+      h[i] = -i;
+    }
+#endif
+
+  kargc = clsw->kargc;
+  clsw->kargc = kargc + 1;
+  kernargreturn(jp->kern, kargc, sizeof(cl_mem), &bp->devmem);
+
+  allocreturn(be, sizeof(bufentry_t));
+  SLIST_INSERT_HEAD(jp->bufhead, be, entry);
+  be->buf = bp;
+
+  *buf = bp;
   return 0;
 }
 
@@ -440,16 +444,48 @@ int clmemory(cljob_ticket job, size_t globalbytes)
 int clkernel(cljob_ticket job)
 {
   int ret;
+  int g, l, i, j;
+  g = 4096;
+  l = 1;
+
 
   _cljob_t *jp;
+  bufentry_t *be;
+  struct _clbuf_s         *buf;
+  int *h;
+
   jp = cljob_from_ticket(job);
 
-  ret = clEnqueueNDRangeKernel(jp->cmdq, jp->kern, 1, NULL,
+#if 0
+  j = -1;
+  SLIST_FOREACH(be, jp->bufhead, entry) {
+    j++;
+    buf = be->buf;
+    h = (int *)buf->hostmem;
+    for(i = 0; i < 100; i++) {
+      printf("hostmem%d[%d] = %d <= %d\n", j, i, h[i], -i);
+      h[i] = -i;
+    }
+  }
+#endif
+
+//  ret = clEnqueueNDRangeKernel(jp->cmdq, jp->kern, 1, NULL,
+//                               &jp->global, &jp->local, 0, NULL, NULL);
+//                               &jp->global, &l, 0, NULL, NULL);
+//  printf("out\n");
+//  exit(0);
+//  ret = clEnqueueNDRangeKernel(jp->cmdq, jp->kern, 1, NULL,
+//                               &jp->global, &jp->local, 0, NULL, NULL);
+
+#if 1
+  //ret = clEnqueueNDRangeKernel(jp->cmdq, jp->kern, 1, NULL,
+  ret = clEnqueueNDRangeKernel(clsw->cmdq, jp->kern, 1, NULL,
                                &jp->global, &jp->local, 0, NULL, NULL);
   if (ret != CL_SUCCESS) {
       E("Kernel exec failed %d!", ret);
       return -1;
   }
+#endif
 
   return 0;
 }
@@ -469,8 +505,10 @@ int clunregister(cljob_ticket job)
 
   jp = cljob_from_ticket(job);
 
-  clreturn(clFlush,  jp->cmdq); /* Issue enqueued commands */
-  clreturn(clFinish, jp->cmdq); /* Block until all commands complete */
+  //clreturn(clFlush,  jp->cmdq); /* Issue enqueued commands */
+  clreturn(clFlush,  clsw->cmdq); /* Issue enqueued commands */
+  //clreturn(clFinish, jp->cmdq); /* Block until all commands complete */
+  clreturn(clFinish, clsw->cmdq); /* Block until all commands complete */
 
   clreturn(clReleaseKernel,       jp->kern);
   clreturn(clReleaseProgram,      jp->prog);
@@ -479,15 +517,18 @@ int clunregister(cljob_ticket job)
     clreturn(clReleaseMemObject, be->buf->hostmem);
   }
 
-  clreturn(clReleaseCommandQueue, jp->cmdq);
-  clreturn(clReleaseContext,      clsw->context);
+  //clreturn(clReleaseCommandQueue, jp->cmdq);
+  //clreturn(clReleaseContext,      clsw->context);
 
   return 0;
 }
 
 /* Calling this shouldn't be neccessary due to garbage collection */
+/* XXX: support more than one clsw, have per-slwx teardown, not here. */
 int clexit(void)
 {
+  int ret;
+
   if (jobhead != NULL) {
     gfree(jobhead);
   }
@@ -497,4 +538,7 @@ int clexit(void)
   if (clhw != NULL) {
     gfree(clhw);
   }
+
+  clreturn(clReleaseCommandQueue, clsw->cmdq);
+  clreturn(clReleaseContext,      clsw->context);
 }
