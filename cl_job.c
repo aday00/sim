@@ -234,19 +234,6 @@ int clbuild(cljob_ticket job, const char *sourcefn, const char *kernelfunc)
 
   _cljob_t *jp;
 
-#if 0
-  cl_command_queue cmdq;
-  cl_program       prog;
-  cl_kernel        kern;
-  jp = cljob_from_ticket(job);
-  jp->cmdq = cmdq;
-  jp->prog = prog;
-  jp->kern = kern;
-  jp->global = 0;
-  jp->local  = 0;
-
-#endif
-
   char *progerr_buf;
   size_t progerr_bufsize = 2048, progerr_buflen;
 
@@ -456,36 +443,12 @@ int clkernel(cljob_ticket job)
 
   jp = cljob_from_ticket(job);
 
-#if 0
-  j = -1;
-  SLIST_FOREACH(be, jp->bufhead, entry) {
-    j++;
-    buf = be->buf;
-    h = (int *)buf->hostmem;
-    for(i = 0; i < 100; i++) {
-      printf("hostmem%d[%d] = %d <= %d\n", j, i, h[i], -i);
-      h[i] = -i;
-    }
-  }
-#endif
-
-//  ret = clEnqueueNDRangeKernel(jp->cmdq, jp->kern, 1, NULL,
-//                               &jp->global, &jp->local, 0, NULL, NULL);
-//                               &jp->global, &l, 0, NULL, NULL);
-//  printf("out\n");
-//  exit(0);
-//  ret = clEnqueueNDRangeKernel(jp->cmdq, jp->kern, 1, NULL,
-//                               &jp->global, &jp->local, 0, NULL, NULL);
-
-#if 1
-  //ret = clEnqueueNDRangeKernel(jp->cmdq, jp->kern, 1, NULL,
   ret = clEnqueueNDRangeKernel(clsw->cmdq, jp->kern, 1, NULL,
                                &jp->global, &jp->local, 0, NULL, NULL);
   if (ret != CL_SUCCESS) {
       E("Kernel exec failed %d!", ret);
       return -1;
   }
-#endif
 
   return 0;
 }
@@ -505,9 +468,7 @@ int clunregister(cljob_ticket job)
 
   jp = cljob_from_ticket(job);
 
-  //clreturn(clFlush,  jp->cmdq); /* Issue enqueued commands */
   clreturn(clFlush,  clsw->cmdq); /* Issue enqueued commands */
-  //clreturn(clFinish, jp->cmdq); /* Block until all commands complete */
   clreturn(clFinish, clsw->cmdq); /* Block until all commands complete */
 
   clreturn(clReleaseKernel,       jp->kern);
@@ -516,9 +477,6 @@ int clunregister(cljob_ticket job)
   SLIST_FOREACH(be, jp->bufhead, entry) {
     clreturn(clReleaseMemObject, be->buf->hostmem);
   }
-
-  //clreturn(clReleaseCommandQueue, jp->cmdq);
-  //clreturn(clReleaseContext,      clsw->context);
 
   return 0;
 }

@@ -59,8 +59,6 @@ int swapmul_gpu(int datalen, int iterations)
   /* Input and output buffers for GPU */
   allocreturn(in,  sm_bytes);
   allocreturn(out, databytes);
-//  in = malloc(sizeof(sm_bytes));
-//  out= malloc(sizeof(databytes));
   for (u = 0; u <= sm_len; u++ ) {
     v = u * rands_per_generator;
     in[u] = (sm_t) { v+1, v+2 };
@@ -83,7 +81,6 @@ int swapmul_gpu(int datalen, int iterations)
     callreturn( clkernel(job) );
     printf("out\n");
   dump_gpu(in, out, sm_len);
-//  return 0;
   callreturn( clkargbufw(bufin) );
   printf("DBGe\n");
   printf("i %d iter %d\n", i, iterations);
