@@ -1,0 +1,11 @@
+Intended to run on Linux machines with an OpenCL-compatible GPU.
+
+Build it:
+make clean
+make
+
+Run it on CPU:
+./main -c -i 1 -l 1024
+
+Run it on GPU:
+./main -i 1 -l 1024
