@@ -47,10 +47,8 @@ int main(int argc, char** argv)
   ginit();
   clinit();
 //  clexit();
-  printf("hello, datalen is %d\n", datalen);
 /*  sum(datalen); */
 /*  rand_mwc(datalen); */
   swapmul(datalen, iterations, use_cpu);
-  printf("hm\n");
   return 0;
 }
