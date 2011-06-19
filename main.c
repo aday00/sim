@@ -10,7 +10,11 @@
 #include "main.h"
 
 void usage(void) {
-  printf("usage\n");
+  printf("usage: main [-c] -i iterations -l datalength\n"
+         "-c: use CPU gather than GPU\n"
+         "-i iterations: re-run algorithm on outputs iterations-1 many times\n"
+         "-l datalength: number of rows/entries to process\n"
+        );
 }
 
 int main(int argc, char** argv)

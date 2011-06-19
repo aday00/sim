@@ -357,6 +357,7 @@ int clkargbuf(cljob_ticket job, cl_mem_flags flags, size_t hostbytes,
   clsw->kargc = kargc + 1;
   kernargreturn(jp->kern, kargc, sizeof(cl_mem), &bp->devmem);
 
+  /* Place buffer on list of buffers to release on job teardown */
   allocreturn(be, sizeof(bufentry_t));
   SLIST_INSERT_HEAD(jp->bufhead, be, entry);
   be->buf = bp;
@@ -384,9 +385,6 @@ int clkargbufw(clbuf_ticket buf)
     return -1;
   }
 
-  /* Place buffer on list of buffers to release on job teardown */
-  allocreturn(be, sizeof(bufentry_t));
-  SLIST_INSERT_HEAD(jp->bufhead, be, entry);
   return 0;
 }
 /* Enqueue a read buffer */
@@ -474,9 +472,11 @@ int clunregister(cljob_ticket job)
   clreturn(clReleaseKernel,       jp->kern);
   clreturn(clReleaseProgram,      jp->prog);
 
+#if 0 // XXX: segfaults  
   SLIST_FOREACH(be, jp->bufhead, entry) {
     clreturn(clReleaseMemObject, be->buf->hostmem);
   }
+#endif
 
   return 0;
 }
@@ -497,6 +497,7 @@ int clexit(void)
     gfree(clhw);
   }
 
+  //XXX: release at unregister time before memory objects freed?
   clreturn(clReleaseCommandQueue, clsw->cmdq);
   clreturn(clReleaseContext,      clsw->context);
 }
